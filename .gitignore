@@ -1,0 +1,10 @@
+# Ignore common files / Byte-compiled / optimized / DLL files
+*.py[cod]
+*.so
+*.swp
+.DS_Store
+
+# python virtual envs
+venv
+
+tags
