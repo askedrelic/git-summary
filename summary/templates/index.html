@@ -1,0 +1,10 @@
+<h1>git summary</h1>
+
+Total files: {{ files | length}} <br>
+Origin: {{repo_link}} <br>
+
+<ul>
+{% for file in files %}
+    <li>{{ file }}</li>
+{% endfor %}
+</ul>
