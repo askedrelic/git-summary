@@ -1,10 +1,34 @@
 <h1>git summary</h1>
 
-Total files: {{ files | length}} <br>
-Origin: {{repo_link}} <br>
 
+Origin: {{repo_link | urlize }} <br>
+Commit count: {{commit_count }} <br>
 <ul>
-{% for file in files %}
-    <li>{{ file }}</li>
-{% endfor %}
+    {% for key, value in commit_year_counts|items | sort(reverse=true) %}
+    <li>{{ key }}, {{value}}</li>
+    {% endfor %}
+</ul>
+
+<br>
+Total files: {{ all_files | length}} <br>
+
+File Types
+<ul>
+    {% for key, value in (file_types|items | sort(reverse=true, attribute="1"))[:10] %}
+    <li>{{ key }}, {{value}}</li>
+    {% endfor %}
+</ul>
+
+Total Tags: {{ tags | length }} <br>
+<ul>
+    {% for key, value in tags | dictsort(reverse=true, by="value") %}
+    <li>{{ key }}, {{value| format_date}}</li>
+    {% endfor %}
+</ul>
+
+Directory Summary
+<ul>
+    {% for key, value in counts|items %}
+    <li>{{ key }}, {{value}}</li>
+    {% endfor %}
 </ul>
