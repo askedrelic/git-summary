@@ -5,7 +5,13 @@ use std::collections::HashMap;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use minijinja::value::Value;
 use minijinja::{context, path_loader, Environment};
+use minijinja::{Error, ErrorKind};
 use once_cell::sync::Lazy;
+
+use std::{
+    io::{self, Write},
+    process,
+};
 
 /// Search for a pattern in a file and display the lines that contain it.
 #[derive(Parser)]
@@ -13,6 +19,15 @@ struct Cli {
     /// The path to the file to read
     #[arg(short, long)]
     workpath: Option<std::path::PathBuf>,
+}
+
+// jinja function
+fn include_file(name: String) -> Result<String, Error> {
+    std::fs::read_to_string(&name)
+        .map_err(|e| Error::new(
+            ErrorKind::InvalidOperation,
+            "cannot load file"
+        ).with_source(e))
 }
 
 fn print_tree_entries<'a>(
@@ -26,9 +41,9 @@ fn print_tree_entries<'a>(
         match entry.kind() {
             Some(ObjectType::Blob) => {
                 if !only_dirs {
-                    let fname = format!("{}/{}", path, entry.name().unwrap());
+                    let mut fname = format!("{}/{}", path, entry.name().unwrap());
                     if fname.starts_with("/") {
-                        let fname = fname.strip_prefix("/").unwrap().to_string();
+                        fname = fname.strip_prefix("/").unwrap().to_string();
                     }
                     files.push(fname);
                 }
@@ -79,7 +94,7 @@ fn count_files_in_dirs<'a>(
 
         let files = print_tree_entries(&tree, &repo, dir.clone(), false);
 
-        let summaryFileTypes = {
+        let summary_file_types = {
             // summarize file types based off file extension
             let mut summary = HashMap::new();
             for file in &files {
@@ -91,10 +106,9 @@ fn count_files_in_dirs<'a>(
         };
         // println!("files: {} {:?}", dir, summaryFileTypes);
         let mut s: String = String::new();
-        for (ext, count) in summaryFileTypes {
+        for (ext, count) in summary_file_types {
             s.push_str(&format!("{}: {} ", ext, count));
         }
-        let s_str: &str = s.as_str();
         dir_file_counts.insert(dir, (files.len(), s));
     }
 
@@ -168,8 +182,9 @@ where
     let mut revwalk = repo.revwalk().unwrap();
     
     // lookup main/master branch ref; don't assume git workdir branch
-    let mref = repo.resolve_reference_from_short_name("master")
-        .or_else(|_| repo.resolve_reference_from_short_name("main"))
+    let mref = repo.resolve_reference_from_short_name("origin/master")
+        .or_else(|_| repo.resolve_reference_from_short_name("origin/main"))
+        .or_else(|_| repo.resolve_reference_from_short_name("origin/dev"))
         .expect("no master or main branch");
     let commit = mref.peel_to_commit().unwrap();
     revwalk.push(commit.id()).unwrap();
@@ -301,18 +316,52 @@ fn format_date(value: i64) -> Value {
     // Value::from_safe_string(date_string)
 }
 
-// minijinja templates
+// minijinja lazy templates
 static ENV: Lazy<Environment<'static>> = Lazy::new(|| {
     let mut env = Environment::new();
     env.set_loader(path_loader("templates"));
     env.add_filter("urlize", urlize);
     env.add_filter("format_date", format_date);
+    env.add_function("include_file", include_file);
     env
 });
 
+// load from embed
+fn env_load() -> Environment<'static> {
+    let mut env = Environment::new();
+    env.add_filter("urlize", urlize);
+    env.add_filter("format_date", format_date);
+    // env.add_function("include_file", include_file);
+    minijinja_embed::load_templates!(&mut env, "main");
+    env
+}
+
+fn compile_css() {
+    println!("cargo:rerun-if-changed=tailwind.config.js");
+    println!("cargo:rerun-if-changed=templates/input.css");
+
+    match process::Command::new("sh")
+        .arg("-c")
+        .arg("npx tailwindcss -i templates/input.css -o templates/output.css")
+        .output()
+    {
+        Ok(output) => {
+            if !output.status.success() {
+                let _ = io::stdout().write_all(&output.stdout);
+                let _ = io::stdout().write_all(&output.stderr);
+                panic!("Tailwind error");
+            }
+        }
+        Err(e) => panic!("Tailwind error: {:?}", e),
+    };
+}
+
 fn main() {
+    // minijinja_embed::embed_templates!("templates");
     let args = Cli::parse();
 
+    compile_css();
+    
     let mut cwd = std::env::current_dir().unwrap();
     if args.workpath.is_some() {
         cwd = args.workpath.unwrap();
@@ -349,7 +398,9 @@ fn main() {
     let commit_count = count_commits(&repo);
     let commit_year_counts = count_commits_by_year(&repo);
 
-    let tmpl = ENV.get_template("index.html").unwrap();
+    // let env = &ENV;
+    let env = env_load();
+    let tmpl = env.get_template("index.html").unwrap();
     let ctx = context!(
         name => "World",
         all_files => all_files,

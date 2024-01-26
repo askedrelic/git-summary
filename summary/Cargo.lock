@@ -585,15 +585,21 @@ dependencies = [
 
 [[package]]
 name = "minijinja"
-version = "1.0.11"
+version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "431d72874542d43aba1ca605870eacab134fdeb0c8fe27666ecf4b2662239df2"
+checksum = "6fe0ff215195a22884d867b547c70a0c4815cbbcc70991f281dca604b20d10ce"
 dependencies = [
  "memo-map",
  "self_cell",
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "minijinja-embed"
+version = "1.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5da47ed3525b56e2fb5c8c5dc6bece96ca0beb8bb9599ec65dfddaa3353aa18c"
 
 [[package]]
 name = "minimal-lexical"
@@ -925,6 +931,7 @@ dependencies = [
  "clap",
  "git2",
  "minijinja",
+ "minijinja-embed",
  "once_cell",
  "regex",
  "tera",
