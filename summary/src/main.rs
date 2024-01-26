@@ -53,9 +53,7 @@ fn summarize_file_types(files: Vec<String>) -> HashMap<String, usize> {
     let mut summary = HashMap::new();
     for file in &files {
         // println!("ext: {}", file);
-        let ext = file.split(".").last().unwrap();
-        // println!("ext: {}", ext);
-        let ext = String::from(ext);
+        let ext = file.split(".").last().unwrap().to_string();
         let count = summary.entry(ext).or_insert(0);
         *count += 1;
     }
@@ -238,7 +236,7 @@ fn get_tags_ordered_by_date(repo: &Repository) -> HashMap<String, i64> {
 
         // let naive = NaiveDateTime::from_timestamp_opt(commit.time().seconds(), 0).unwrap();
         // let newdate = naive.format("%Y-%m-%d %H:%M:%S").to_string();
-        tags.insert(String::from(name), commit.time().seconds());
+        tags.insert(name.to_string(), commit.time().seconds());
     }
 
     // let tags = repo.tag_names(None).unwrap();
