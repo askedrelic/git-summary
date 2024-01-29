@@ -338,11 +338,11 @@ fn env_load() -> Environment<'static> {
 
 fn compile_css() {
     println!("cargo:rerun-if-changed=tailwind.config.js");
-    println!("cargo:rerun-if-changed=templates/input.css");
+    println!("cargo:rerun-if-changed=src/templates/input.css");
 
     match process::Command::new("sh")
         .arg("-c")
-        .arg("npx tailwindcss -i templates/input.css -o templates/output.css")
+        .arg("npx tailwindcss -i src/templates/input.css -o srctemplates/output.css")
         .output()
     {
         Ok(output) => {

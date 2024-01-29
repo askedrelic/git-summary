@@ -8,5 +8,5 @@
 venv
 
 tags
-summary/target/
+target/
 node_modules
