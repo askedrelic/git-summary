@@ -1,5 +1,7 @@
 use clap::Parser;
 use git2::{ObjectType, Repository, Sort, Commit};
+use std::path::PathBuf;
+use std::string;
 use std::{fmt::Debug, fs, path::Path};
 use std::collections::HashMap;
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -7,6 +9,7 @@ use minijinja::value::Value;
 use minijinja::{context, path_loader, Environment};
 use minijinja::{Error, ErrorKind};
 use once_cell::sync::Lazy;
+use std::process::Command;
 
 use std::{
     io::{self, Write},
@@ -151,7 +154,7 @@ fn print_commit_info(repo: &Repository, commit_id: git2::Oid) {
 //     count
 // }
 
-
+// TODO move to shell cmd
 fn count_commits(repo: &Repository) -> usize {
     let mut count = 0;
     let commit_count = |commit: &Commit| {
@@ -161,10 +164,10 @@ fn count_commits(repo: &Repository) -> usize {
     count
 }
 
-fn count_commits_by_year(repo: &Repository) -> HashMap<i64, i32> {
+// NOTE: too slow for large repos; 250K commits
+fn count_commits_by_year_slow(repo: &Repository) -> HashMap<i64, i32> {
     let mut count = HashMap::new();
 
-    
     let commit_count = |commit: &Commit| {
         let timestamp = commit.time().seconds();
         let approx_year = 1970 + timestamp / 31_556_952;
@@ -173,6 +176,111 @@ fn count_commits_by_year(repo: &Repository) -> HashMap<i64, i32> {
     walk_commits(&repo, commit_count);
     count
 }
+
+fn count_commits_by_year(cwd: &PathBuf) -> Vec<(String, i32)> {
+    let cmd = format!(r#"git -C {} log --format='%aD' | awk '{{ year[$4]++ }} END {{ for (y in year) print y, year[y] }}'"#, cwd.display());
+    let output = process::Command::new("sh").arg("-c")
+        .arg(cmd)
+        .output()
+        .expect("Failed to execute git command");
+
+    let output = String::from_utf8(output.stdout).unwrap();
+
+    let mut data: Vec<(String, i32)> = output
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split(' ').collect();
+            if parts.len() == 2 {
+                let year = parts[0].trim().to_string();
+                let count = parts[1].trim().parse::<i32>().ok();
+                count.map(|c| (year, c))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // sort by year, can't trust git log order
+    data.sort_by(|a, b| a.0.cmp(&b.0));
+    data
+}
+
+
+fn git_author_status(cwd: &PathBuf) -> Vec<(i32, String)> {
+    let cmd = format!("git -C {} shortlog -s -n --all", cwd.display());
+    let output =  process::Command::new("sh").arg("-c")
+    .arg(cmd)
+    .output()
+    .expect("git_author_status failed");
+    let output = String::from_utf8(output.stdout).unwrap();
+    let data = output
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() == 2 {
+                let count = parts[0].trim().parse::<i32>().ok();
+                let name = parts[1].trim().to_string();
+                count.map(|c| (c, name))
+            } else {
+                None
+            }
+        }) 
+        .collect();
+    data
+}
+
+fn find_news(cwd: &PathBuf) -> Vec<String> {
+    // Doing the search in shell for now, can't get git grep to work how I want
+    let cmd = format!("git -C {} ls-files", cwd.display());
+    let output =  process::Command::new("sh").arg("-c")
+    .arg(cmd)
+    .output()
+    .expect("find_news failed");
+    let output = String::from_utf8(output.stdout).unwrap();
+
+    let files = [
+        "news",
+        "changelog",
+        "history",
+        "releases",
+        "changes",
+    ];
+    let exclusions = [
+        "node_modules",
+        "vendor",
+        "dist",
+        "build",
+        "target",
+        "test"
+    ];
+
+    let mut matches: Vec<String> = output
+        .lines()
+        .filter_map(|line| {
+            let lower_line = line.to_lowercase();
+            for exclusion in &exclusions {
+                if lower_line.contains(exclusion) {
+                    return None;
+                }
+            }
+            for file in &files {
+                if lower_line.contains(file) {
+                    return Some(line.to_string());
+                }
+            }
+            None
+        })
+        .collect();
+
+    // sort by length; shortest string works for now
+    // TODO sort by priority or most correct match; if CHANGELOG.md directly matches
+    matches.sort_by(|a, b| a.len().cmp(&b.len()));
+    if matches.len() > 10 {
+        matches = matches[0..10].to_vec();
+    }
+    matches
+}
+
 
 // Convenience function to walk all commits from main/master branch
 fn walk_commits<F>(repo: &Repository, mut action: F)
@@ -233,10 +341,20 @@ fn get_tags_ordered_by_date(repo: &Repository) -> HashMap<String, i64> {
         let obj = repo.revparse_single(name).unwrap();
         let commit = match obj.kind() {
             Some(git2::ObjectType::Tag) => {
-            // Some(tag) = obj.as_tag() {
-                let tag = obj.as_tag().unwrap();
+                
+                let tag = obj.as_tag();
+                if !tag.is_some() {
+                    continue;
+                }
+                let tag = tag.unwrap();
+                let target_id = tag.target_id();
+                // println!("{}", target_id);
                 // handle lightweight tags; need to lookup commit from tag
-                let commit = repo.find_commit(tag.target_id()).unwrap();
+                let commit = match repo.find_commit(target_id) {
+                    Ok(commit) => commit,
+                    Err(_) => continue,
+                };
+
                 // println!("commit {} {}", name, commit.id());
                 commit.to_owned()
             }
@@ -363,14 +481,13 @@ fn main() {
         cwd = args.workpath.unwrap();
     }
     println!("The current directory is {}", cwd.display());
-
+    
 
     // attempt to read git directory
-    let repo = match Repository::open(cwd) {
+    let repo = match Repository::open(&cwd) {
         Ok(repo) => repo,
-        Err(e) => panic!("failed to open: {}", e),
+        Err(e) => panic!("failed to open git dir: {}", e),
     };
-    println!("repo: {:?}", repo.path());
 
     let head = repo.head().unwrap();
     let tree = head.peel(ObjectType::Tree).unwrap().into_tree().unwrap();
@@ -378,7 +495,6 @@ fn main() {
     let dirs = print_tree_entries(&tree, &repo, String::new(), true);
     let counts = count_files_in_dirs(dirs.clone(), &repo);
 
-    let _strings = vec!["A", "alfa", "1"];
     let origin = repo.find_remote("origin").unwrap();
     let repo_url = origin.url().unwrap();
     // assume git@github.com/user/repo format
@@ -388,13 +504,23 @@ fn main() {
         .unwrap()
         .replace(":", "/");
 
+    println!("1");
     let tags = get_tags_ordered_by_date(&repo);
     let all_files = print_tree_entries(&tree, &repo, String::new(), false);
+    println!("2");
     let summarize_file_types = summarize_file_types(all_files.clone());
     let commit_count = count_commits(&repo);
-    let commit_year_counts = count_commits_by_year(&repo);
+    println!("3");
+    // let commit_year_counts = aggregate_commits_by_year(&cwd);
+    let commit_year_counts = count_commits_by_year(&cwd);
+    println!("4");
+    let git_authors = git_author_status(&cwd);
+
+    println!("5");
+    let news_matches = find_news(&cwd);
 
 
+    
     // let env = &ENV;
     let env = &ENV;
     let tmpl = env.get_template("index.html").unwrap();
@@ -407,6 +533,8 @@ fn main() {
         counts => counts,
         tags => tags,
         file_types => summarize_file_types,
+        git_authors => git_authors,
+        news_matches => news_matches,
     );
 
     // println!("context: {:?}", ctx);
