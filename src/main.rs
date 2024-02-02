@@ -319,7 +319,7 @@ fn format_date(value: i64) -> Value {
 // minijinja lazy templates
 static ENV: Lazy<Environment<'static>> = Lazy::new(|| {
     let mut env = Environment::new();
-    env.set_loader(path_loader("templates"));
+    env.set_loader(path_loader("src/templates"));
     env.add_filter("urlize", urlize);
     env.add_filter("format_date", format_date);
     env.add_function("include_file", include_file);
@@ -336,13 +336,11 @@ fn env_load() -> Environment<'static> {
     env
 }
 
+// see also build.rs cmds for rerun-if-changed
 fn compile_css() {
-    println!("cargo:rerun-if-changed=tailwind.config.js");
-    println!("cargo:rerun-if-changed=src/templates/input.css");
-
     match process::Command::new("sh")
         .arg("-c")
-        .arg("npx tailwindcss -i src/templates/input.css -o srctemplates/output.css")
+        .arg("npx tailwindcss -i src/templates/input.css -o src/templates/output.css")
         .output()
     {
         Ok(output) => {
@@ -356,18 +354,16 @@ fn compile_css() {
     };
 }
 
-fn main() {
-    // minijinja_embed::embed_templates!("templates");
-    let args = Cli::parse();
 
+fn main() {
     compile_css();
-    
+    let args = Cli::parse();
     let mut cwd = std::env::current_dir().unwrap();
     if args.workpath.is_some() {
         cwd = args.workpath.unwrap();
     }
     println!("The current directory is {}", cwd.display());
-    // println!("hello summary");
+
 
     // attempt to read git directory
     let repo = match Repository::open(cwd) {
@@ -398,8 +394,9 @@ fn main() {
     let commit_count = count_commits(&repo);
     let commit_year_counts = count_commits_by_year(&repo);
 
+
     // let env = &ENV;
-    let env = env_load();
+    let env = &ENV;
     let tmpl = env.get_template("index.html").unwrap();
     let ctx = context!(
         name => "World",
