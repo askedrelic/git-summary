@@ -1,0 +1,83 @@
+<section>
+    <div class="mx-auto max-w-screen-xl px-4 py-12 sm:px-6 md:py-16 lg:px-8">
+
+        <h2 class="mt-8 text-xl">
+            Git Summary
+        </h2>
+
+        <div class="">    
+            <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div class="flex flex-col rounded-lg border border-gray-100 px-4 py-8 text-center">
+                    <dt class="order-last text-lg font-medium text-gray-500">Total Commits</dt>
+
+                    <dd class="text-4xl font-extrabold text-blue-600 md:text-5xl">{{commit_count }}</dd>
+                </div>
+
+
+                <div class="flex flex-col rounded-lg border border-gray-100 px-4 py-8 text-center">
+                    <dt class="order-last text-lg font-medium text-gray-500">Total Tags</dt>
+                    <dd class="text-4xl font-extrabold text-blue-600 md:text-5xl">{{ tags | length }}</dd>
+                </div>
+
+                <div class="flex flex-col rounded-lg border border-gray-100 px-4 py-8 text-center">
+                    <dt class="order-last text-lg font-medium text-gray-500">Total Files</dt>
+                    <dd class="text-4xl font-extrabold text-blue-600 md:text-5xl">{{ all_files | length}}</dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+</section>
+
+<div class="container mx-auto">
+
+    <ul class="list-disc">
+        {% for key, value in commit_year_counts|items | sort(reverse=true) %}
+        <li>{{ key }}, {{value}}</li>
+        {% endfor %}
+    </ul>
+
+    <div class="">
+        <table class="table-auto">
+            <!-- head -->
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Job</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for key, value in commit_year_counts|items | sort(reverse=true) %}
+                <tr>
+                    <th>{{ key }}</th>
+                    <th>{{value}}</th>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <br>
+    Total files: {{ all_files | length}} <br>
+
+    File Types
+    <ul class="list-disc">
+        {% for key, value in (file_types|items | sort(reverse=true, attribute="1"))[:10] %}
+        <li>{{ key }}, {{value}}</li>
+        {% endfor %}
+    </ul>
+
+    Total Tags: {{ tags | length }} <br>
+    <ul class="list-disc">
+        {% for key, value in tags | dictsort(reverse=true, by="value") %}
+        <li>{{ key }}, {{value| format_date}}</li>
+        {% endfor %}
+    </ul>
+
+    Authors: {{ git_authors | length }} <br>
+    <ul class="list-disc">
+        {% for author in git_authors %}
+        <li>{{ author }}</li>
+        {% endfor %}
+    </ul>
+
+</div>
