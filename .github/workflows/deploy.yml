@@ -11,14 +11,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0    # Fetch all history for .GitInfo and .Lastmod
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+      - name: Install Rust (Stable)
+        run:
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
       - run: cargo run -- -o ./static/index.html
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v3
