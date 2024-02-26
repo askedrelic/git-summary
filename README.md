@@ -2,6 +2,8 @@
 
 git-summary is a Rust based script to generate an HTML summary of a git repository. Several tools and scripts exist to analyze git repos for specific metrics, along with GitHub providing various types of analytics, but git-summary aims to be the most concise way to understand a git repo.
 
+For example, the summary of this repo is available here: https://askedrelic.github.io/git-summary/
+
 # Usage
 
 TODO
