@@ -1,27 +1,28 @@
 use clap::Parser;
 use git2::{ObjectType, Repository, Sort, Commit};
 use std::path::PathBuf;
-use std::string;
-use std::{fmt::Debug, fs, path::Path};
+use std::{fs, path::Path};
 use std::collections::HashMap;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use minijinja::value::Value;
 use minijinja::{context, path_loader, Environment};
 use minijinja::{Error, ErrorKind};
 use once_cell::sync::Lazy;
-use std::process::Command;
 
 use std::{
     io::{self, Write},
     process,
 };
-
-/// Search for a pattern in a file and display the lines that contain it.
 #[derive(Parser)]
 struct Cli {
-    /// The path to the file to read
+    /// The path to the git repo
     #[arg(short, long)]
     workpath: Option<std::path::PathBuf>,
+
+    /// HTML output file location
+    #[arg(short, long, default_value = "output.html")]
+    outpath: String,
+
 }
 
 // jinja function
@@ -480,6 +481,10 @@ fn main() {
     if args.workpath.is_some() {
         cwd = args.workpath.unwrap();
     }
+    // let mut outpath = "output.html";
+    // if args.outpath.is_some() {
+    //     outpath = args.outpath.unwrap().as_str().clone();
+    // }
     println!("The current directory is {}", cwd.display());
     
 
@@ -539,6 +544,5 @@ fn main() {
 
     // println!("context: {:?}", ctx);
     // Write to a file
-    let filepath = "output.html";
-    fs::write(filepath, tmpl.render(ctx).unwrap()).expect("Unable to write file");
+    fs::write(args.outpath, tmpl.render(ctx).unwrap()).expect("Unable to write file");
 }
